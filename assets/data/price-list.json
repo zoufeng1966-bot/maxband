@@ -1,5 +1,5 @@
 {
-  "_comment": "Maxband price list — editable by Joe via /admin.html. Save updates to assets/data/price-list.json. All prices are EXW Hangzhou estimates.",
+  "_comment": "Maxband price list — editable by Joe via /admin.html. Save updates to assets/data/price-list.json. All prices are EXW Hangzhou estimates. From 2026-Q3 the banding-tool line is split into three SKUs: banding-tool-manual (MBT002), banding-tool-ratchet (YT003), banding-tool-giant (carton & pricing pending production confirmation).",
   "currency": "USD",
   "validUntil": "2026-12-31",
   "incoterm": "EXW Hangzhou",
@@ -47,14 +47,30 @@
         { "minBoxes": 200, "unitPrice": 72.00 }
       ]
     },
-    "banding-tool": {
+    "banding-tool-manual": {
       "unitPrice": 145.00,
-      "perUnit": "box (1 pc)",
+      "perUnit": "box (1 pc · MBT002 Manual)",
       "moqBoxes": 5,
       "priceTiers": [
         { "minBoxes": 5,  "unitPrice": 145.00 },
         { "minBoxes": 20, "unitPrice": 132.00 },
         { "minBoxes": 50, "unitPrice": 120.00 }
+      ]
+    },
+    "banding-tool-ratchet": {
+      "unitPrice": 0,
+      "perUnit": "Quote on request (YT003)",
+      "moqBoxes": 0,
+      "priceTiers": [
+        { "minBoxes": 0, "unitPrice": 0 }
+      ]
+    },
+    "banding-tool-giant": {
+      "unitPrice": 0,
+      "perUnit": "Quote on request (Giant — pending)",
+      "moqBoxes": 0,
+      "priceTiers": [
+        { "minBoxes": 0, "unitPrice": 0 }
       ]
     }
   }

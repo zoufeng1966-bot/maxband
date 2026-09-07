@@ -16,4 +16,8 @@ scripts.archive/
 # Smoke-test scratch files
 _*.cjs
 
+# Local preview server script (not part of the deployed site)
+serve.py
+serve.log
+
 # Pricing list is intentionally NOT ignored — it's the live data file

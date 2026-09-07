@@ -41,12 +41,10 @@
     note: 'Screw Lock Buckle carton specs are pending — to be supplied before next quotation cycle.'
   };
 
-  // Banding tool — two real models from the spec sheet.
-  // Giant Banding Tool specs pending from production; placeholder below.
-  var BANDING_TOOL_VARIANTS = [
-    { model: 'MBT002', type: 'Manual Banding Tool', cartonDimsCm: '52 × 28 × 18', unitsPerBox: 1, boxesPerCarton: 10, netWeightKg: 18, grossWeightKg: 20, cartonVolumeM3: 0.02621, isGiant: false },
-    { model: 'YT003',  type: 'Ratchet Banding Tool (standalone model)', cartonDimsCm: '39 × 39 × 22', unitsPerBox: 1, boxesPerCarton: 10, netWeightKg: 14, grossWeightKg: 16, cartonVolumeM3: 0.03346, isGiant: false }
-  ];
+  // Banding tool — split into three pricing/variant lines (2026-Q3):
+  //   • banding-tool-manual  → MBT002  Manual Banding Tool (real data)
+  //   • banding-tool-ratchet → YT003   Ratchet Banding Tool, standalone (real data)
+  //   • banding-tool-giant   → Giant Banding Tool (carton specs pending)
 
   var BANDING_TOOL_GIANT_PLACEHOLDER = {
     pending: true,
@@ -101,14 +99,38 @@
     variantNote: 'Note: the smallest size (9.5L) ships 30 boxes per master carton to optimize container utilization.'
   };
 
-  var bandingToolFlat = {
+  var bandingToolManualFlat = {
     unitsPerBox: '1 pc',
-    boxesPerCarton: mostCommonBoxes(BANDING_TOOL_VARIANTS),
-    cartonDimsCm: firstDims(BANDING_TOOL_VARIANTS),
-    cartonVolumeM3: avg(BANDING_TOOL_VARIANTS.map(function (v) { return v.cartonVolumeM3; })),
-    netWeightPerCartonKg: +avg(BANDING_TOOL_VARIANTS.map(function (v) { return v.netWeightKg; })).toFixed(1),
-    grossWeightPerCartonKg: +avg(BANDING_TOOL_VARIANTS.map(function (v) { return v.grossWeightKg; })).toFixed(1),
-    variants: BANDING_TOOL_VARIANTS
+    boxesPerCarton: 10,
+    cartonDimsCm: '52 × 28 × 18',
+    cartonVolumeM3: 0.02621,
+    netWeightPerCartonKg: 18,
+    grossWeightPerCartonKg: 20,
+    variants: [
+      { model: 'MBT002', type: 'Manual Banding Tool', cartonDimsCm: '52 × 28 × 18', unitsPerBox: 1, boxesPerCarton: 10, netWeightKg: 18, grossWeightKg: 20, cartonVolumeM3: 0.02621, isGiant: false }
+    ]
+  };
+
+  var bandingToolRatchetFlat = {
+    unitsPerBox: '1 pc',
+    boxesPerCarton: 10,
+    cartonDimsCm: '39 × 39 × 22',
+    cartonVolumeM3: 0.03346,
+    netWeightPerCartonKg: 14,
+    grossWeightPerCartonKg: 16,
+    variants: [
+      { model: 'YT003', type: 'Ratchet Banding Tool (standalone model)', cartonDimsCm: '39 × 39 × 22', unitsPerBox: 1, boxesPerCarton: 10, netWeightKg: 14, grossWeightKg: 16, cartonVolumeM3: 0.03346, isGiant: false }
+    ]
+  };
+
+  var bandingToolGiantFlat = {
+    unitsPerBox: '1 pc',
+    boxesPerCarton: 5,
+    cartonDimsCm: 'pending',
+    cartonVolumeM3: 0.045,
+    netWeightPerCartonKg: 28,
+    grossWeightPerCartonKg: 30,
+    placeholder: BANDING_TOOL_GIANT_PLACEHOLDER
   };
 
   window.MAXXBAND_SPECS = {
@@ -147,13 +169,26 @@
       placeholder: SCREW_LOCK_PLACEHOLDER
     },
 
-    'banding-tool': Object.assign({
-      name: 'Banding Tool (Manual / Ratchet; Giant — pending)',
-      shortName: 'Banding Tool',
+    'banding-tool-manual': Object.assign({
+      name: 'Maxband Manual Banding Tool',
+      shortName: 'Banding Tool — Manual (MBT002)',
       slug: '/products/banding-tool.html',
-      hasVariants: true,
-      giantPlaceholder: BANDING_TOOL_GIANT_PLACEHOLDER
-    }, bandingToolFlat)
+      hasVariants: true
+    }, bandingToolManualFlat),
+
+    'banding-tool-ratchet': Object.assign({
+      name: 'Maxband Ratchet Banding Tool',
+      shortName: 'Banding Tool — Ratchet (YT003)',
+      slug: '/products/banding-tool.html',
+      hasVariants: true
+    }, bandingToolRatchetFlat),
+
+    'banding-tool-giant': Object.assign({
+      name: 'Maxband Giant Banding Tool',
+      shortName: 'Banding Tool — Giant',
+      slug: '/products/banding-tool.html',
+      hasVariants: false
+    }, bandingToolGiantFlat)
   };
 
   /* Container payload limits — ISO maritime standard figures */
