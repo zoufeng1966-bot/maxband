@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Owner Console · Maxband Price &amp; MOQ Editor</title>
+  <meta name="robots" content="noindex,nofollow" />
+  <link rel="stylesheet" href="/assets/css/style.css" />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='10' fill='%231a3760'/%3E%3Ctext x='32' y='44' font-size='38' font-family='Arial' font-weight='bold' fill='%23ffffff' text-anchor='middle'%3EM%3C/text%3E%3C/svg%3E" />
+  <style>
+    .admin-shell { max-width: 880px; margin: 32px auto; }
+    .admin-section { background: #fff; border: 1px solid #e1e6ed; border-radius: 8px; padding: 24px; margin-bottom: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
+    .admin-section h2 { font-size: 16px; color: var(--accent, #1a3760); margin-bottom: 14px; padding-bottom: 8px; border-bottom: 1px solid #f0f2f5; }
+    .form-row { display: grid; grid-template-columns: 200px 1fr; gap: 12px; align-items: center; padding: 8px 0; }
+    .form-row label { font-size: 13px; color: var(--text, #1a1a1a); font-weight: 500; }
+    .form-row input, .form-row select, .form-row textarea {
+      width: 100%; padding: 8px 10px; border: 1px solid #ccd2db; border-radius: 4px; font-size: 14px; background: #fafbfc; font-family: inherit;
+    }
+    .form-row input:focus, .form-row select:focus, .form-row textarea:focus { outline: none; border-color: var(--accent, #1a3760); background: #fff; }
+    .form-row textarea { min-height: 60px; resize: vertical; }
+    .form-row .helper { font-size: 11px; color: var(--text-light, #5a6b7e); margin-top: 2px; }
+
+    .product-block { border: 1px solid #e1e6ed; border-radius: 6px; padding: 16px; margin-bottom: 14px; background: #fafbfc; }
+    .product-block h3 { font-size: 14px; color: var(--accent, #1a3760); margin-bottom: 10px; }
+    .tier-block {
+      display: grid; grid-template-columns: 1fr 1fr auto;
+      gap: 8px; align-items: center; margin-bottom: 6px;
+    }
+    .tier-block input { padding: 6px 8px; font-size: 13px; }
+    .tier-block .tier-remove { background: transparent; border: none; color: #c84a4a; cursor: pointer; font-size: 16px; padding: 4px 8px; }
+    .tier-add { font-size: 12px; color: var(--accent, #1a3760); background: transparent; border: 1px dashed var(--accent, #1a3760); padding: 4px 10px; border-radius: 4px; cursor: pointer; margin-top: 4px; }
+
+    .admin-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+    .admin-actions .btn { flex: 1; min-width: 180px; }
+    .toast {
+      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+      background: var(--accent, #1a3760); color: #fff;
+      padding: 12px 20px; border-radius: 6px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+      opacity: 0; transition: opacity .25s, transform .25s;
+      z-index: 100;
+      font-size: 14px;
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(-6px); }
+
+    .help-banner {
+      background: #f4f7fb; border-left: 4px solid var(--accent, #1a3760);
+      padding: 14px 18px; border-radius: 6px; margin-bottom: 20px; font-size: 13px; color: #3a4a5e;
+    }
+    .help-banner strong { color: var(--accent, #1a3760); }
+    .help-banner ol { padding-left: 18px; margin-top: 8px; }
+    .help-banner li { margin-bottom: 4px; }
+
+    .owner-bar {
+      background: #1a3760; color: #fff; padding: 10px 0; font-size: 13px;
+    }
+    .owner-bar .container { display: flex; justify-content: space-between; align-items: center; }
+    .owner-bar a { color: #fff; opacity: 0.85; text-decoration: none; }
+    .owner-bar a:hover { opacity: 1; }
+  </style>
+</head>
+<body>
+  <div class="owner-bar">
+    <div class="container">
+      <span>Maxband Owner Console &middot; <span id="status-loading">loading&hellip;</span></span>
+      <a href="/carton-estimator.html">&larr; Back to Estimator</a>
+    </div>
+  </div>
+
+  <div class="admin-shell container">
+    <h1>Price &amp; MOQ Editor</h1>
+    <p style="color:var(--text-light); font-size:14px;">Edit your selling prices, MOQ rules, volume tiers. Save updates back to <code>assets/data/price-list.json</code> so customers see them on the Estimator.</p>
+
+    <div class="help-banner">
+      <strong>How saving works</strong> (this is a static site &mdash; no database):
+      <ol>
+        <li>Edit the fields below.</li>
+        <li>Click <strong>Publish updates</strong> &mdash; browser downloads <code>price-list.json</code> automatically.</li>
+        <li>Drop the downloaded file into <code>assets/data/</code> of your project (replacing the existing one).</li>
+        <li>Tell me <em>"new price list uploaded"</em> &mdash; I'll verify and restart the preview.</li>
+      </ol>
+    </div>
+
+    <form id="admin-form">
+
+      <div class="admin-section">
+        <h2>Global settings</h2>
+        <div class="form-row">
+          <label for="currency">Currency</label>
+          <select id="currency">
+            <option value="USD">USD - US Dollar</option>
+            <option value="EUR">EUR - Euro</option>
+            <option value="RMB">RMB - 人民币</option>
+            <option value="GBP">GBP - British Pound</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label for="validUntil">Valid until</label>
+          <input type="date" id="validUntil" />
+        </div>
+        <div class="form-row">
+          <label for="incoterm">Incoterm</label>
+          <input type="text" id="incoterm" placeholder="EXW Hangzhou" />
+          <div class="helper">e.g. EXW Hangzhou / FOB Ningbo / CIF Hamburg</div>
+        </div>
+        <div class="form-row">
+          <label for="paymentTerms">Payment terms</label>
+          <input type="text" id="paymentTerms" placeholder="T/T 30% deposit" />
+        </div>
+        <div class="form-row">
+          <label for="leadTimeDays">Lead time (days)</label>
+          <input type="number" id="leadTimeDays" min="0" step="1" />
+        </div>
+        <div class="form-row">
+          <label for="notes">Customer-facing notes</label>
+          <textarea id="notes" placeholder="Volume discounts available..."></textarea>
+        </div>
+      </div>
+
+      <div class="admin-section">
+        <h2>Product prices &amp; MOQ</h2>
+        <div id="products-container">
+          <!-- product blocks injected by JS -->
+        </div>
+      </div>
+
+      <div class="admin-section">
+        <h2>Publish</h2>
+        <div class="admin-actions">
+          <button type="button" id="btn-publish" class="btn btn-accent">Publish updates (download JSON)</button>
+          <button type="button" id="btn-copy" class="btn btn-outline">Copy JSON to clipboard</button>
+          <button type="button" id="btn-reset" class="btn btn-outline">Reset to defaults</button>
+        </div>
+        <p style="margin-top:14px; font-size:12px; color:var(--text-light);">
+          Tip: after download, drop the file into <code>C:\Users\zoufe\WorkBuddy\2026-09-05-09-15-05\assets\data\price-list.json</code> (overwriting the existing one) &mdash; WorkBuddy's local server will pick it up on next page load.
+        </p>
+      </div>
+
+    </form>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script src="/assets/data/product-specs.js"></script>
+  <script>
+    // Inject product display names
+    window.PRODUCT_DISPLAY = {};
+    Object.keys(window.MAXXBAND_SPECS).forEach(k => {
+      window.PRODUCT_DISPLAY[k] = window.MAXXBAND_SPECS[k].shortName;
+    });
+  </script>
+  <script src="/assets/js/admin.js"></script>
+</body>
+</html>

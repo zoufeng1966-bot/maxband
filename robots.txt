@@ -1,0 +1,11 @@
+# Robots.txt for Maxband (maxband.cn)
+User-agent: *
+Allow: /
+Disallow: /site.template-backup/
+Disallow: /scripts.archive/
+
+# Sitemap
+Sitemap: https://maxband.cn/sitemap.xml
+
+# Crawl-delay
+Crawl-delay: 1

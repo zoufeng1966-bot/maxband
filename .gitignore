@@ -1,0 +1,19 @@
+node_modules/
+.cache/
+.vite/
+.astro/
+dist/
+.DS_Store
+Thumbs.db
+
+# Old / archived work — never go in main repo
+site.template-backup/
+scripts.archive/
+
+# WorkBuddy runtime state — workspace-only, not project source
+.workbuddy/
+
+# Smoke-test scratch files
+_*.cjs
+
+# Pricing list is intentionally NOT ignored — it's the live data file

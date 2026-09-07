@@ -1,0 +1,61 @@
+{
+  "_comment": "Maxband price list — editable by Joe via /admin.html. Save updates to assets/data/price-list.json. All prices are EXW Hangzhou estimates.",
+  "currency": "USD",
+  "validUntil": "2026-12-31",
+  "incoterm": "EXW Hangzhou",
+  "paymentTerms": "T/T 30% deposit, 70% before shipment",
+  "leadTimeDays": 25,
+  "notes": "Volume discounts available above 100 cartons. OEM retail-box printing +USD 0.05/box. Prices exclude destination port charges.",
+  "products": {
+    "strap": {
+      "unitPrice": 8.50,
+      "perUnit": "box (30 m)",
+      "moqBoxes": 50,
+      "priceTiers": [
+        { "minBoxes": 50,  "unitPrice": 8.50 },
+        { "minBoxes": 200, "unitPrice": 7.80 },
+        { "minBoxes": 500, "unitPrice": 7.20 }
+      ]
+    },
+    "ear-buckle": {
+      "unitPrice": 18.00,
+      "perUnit": "box (100 pcs)",
+      "moqBoxes": 10,
+      "priceTiers": [
+        { "minBoxes": 10,  "unitPrice": 18.00 },
+        { "minBoxes": 50,  "unitPrice": 16.50 },
+        { "minBoxes": 200, "unitPrice": 15.00 }
+      ]
+    },
+    "clip": {
+      "unitPrice": 22.00,
+      "perUnit": "box (100 pcs)",
+      "moqBoxes": 10,
+      "priceTiers": [
+        { "minBoxes": 10,  "unitPrice": 22.00 },
+        { "minBoxes": 50,  "unitPrice": 20.00 },
+        { "minBoxes": 200, "unitPrice": 18.50 }
+      ]
+    },
+    "screw-lock": {
+      "unitPrice": 85.00,
+      "perUnit": "box (100 pcs)",
+      "moqBoxes": 10,
+      "priceTiers": [
+        { "minBoxes": 10,  "unitPrice": 85.00 },
+        { "minBoxes": 50,  "unitPrice": 78.00 },
+        { "minBoxes": 200, "unitPrice": 72.00 }
+      ]
+    },
+    "banding-tool": {
+      "unitPrice": 145.00,
+      "perUnit": "box (1 pc)",
+      "moqBoxes": 5,
+      "priceTiers": [
+        { "minBoxes": 5,  "unitPrice": 145.00 },
+        { "minBoxes": 20, "unitPrice": 132.00 },
+        { "minBoxes": 50, "unitPrice": 120.00 }
+      ]
+    }
+  }
+}
