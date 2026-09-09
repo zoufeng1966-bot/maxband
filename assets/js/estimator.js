@@ -90,7 +90,7 @@
         ${p.placeholder && p.placeholder.pending ? `<div class="est-row-pending" data-role="pending-tag">Carton specs pending internal confirmation</div>` : ''}
       </div>
       <div class="est-row-input">
-        <input type="number" min="0" step="1" placeholder="0"
+        <input type="number" min="0" step="10" placeholder="0"
                data-product="${key}" data-role="boxes"
                disabled />
         <span class="est-row-unit">boxes</span>
