@@ -65,6 +65,13 @@
           ${p.unitsPerBox} per box &middot; ${p.boxesPerCarton} boxes/ctn
           ${pz ? ` &middot; <strong>${priceList.currency} ${unitPrice.toFixed(2)}</strong> / ${perUnit}` : ''}
         </div>
+        ${p.packaging ? `
+          <div class="est-packaging">
+            <span class="est-packaging-label">Packaging:</span>
+            <span>${p.packaging.active.label} &mdash; ${p.packaging.active.note}</span>
+            ${p.packaging.paper && p.packaging.paper.pending ? `<span class="est-packaging-pending">&middot; ${p.packaging.paper.label} specs pending</span>` : ''}
+          </div>
+        ` : ''}
         ${(p.hasVariants && p.variants && p.variants.length > 1) ? `
           <div class="est-row-variants" data-role="variant-chips" hidden>
             <span class="est-variant-label">Choose size:</span>

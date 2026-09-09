@@ -12,6 +12,28 @@
 
 (function () {
 
+  // SS201 Strap ships in ONE of two packaging formats, and the carton
+  // dimensions DEPEND on the format:
+  //   • Plastic Box with Handle (reusable dispenser) — one uniform plastic box
+  //     size across all widths, so the master carton is identical for every width.
+  //     The STRAP_VARIANTS rows below ARE this format (carton 32 × 26 × 36, uniform).
+  //   • Paper Box — carton dimensions vary by strap width & thickness.
+  //     (Paper box carton specs pending from Joe — see STRAP_PACKAGING.paper.)
+  var STRAP_PACKAGING = {
+    active: {
+      key: 'plastic-box',
+      label: 'Plastic Box with Handle',
+      cartonDimsCm: '32 × 26 × 36',
+      note: 'Uniform reusable dispenser box — one master carton size across all widths.'
+    },
+    paper: {
+      key: 'paper-box',
+      label: 'Paper Box',
+      pending: true,
+      note: 'Paper box carton dimensions vary by strap width & thickness — pending, to be supplied.'
+    }
+  };
+
   var STRAP_VARIANTS = [
     { width: '1/2"', widthMm: 12.7,  thicknessMm: 0.76, lengthPerBox: '30 m', cartonDimsCm: '32 × 26 × 36', boxesPerCarton: 10, netWeightKg: 23,  grossWeightKg: 24,   cartonVolumeM3: 0.02995 },
     { width: '5/8"', widthMm: 16.0,  thicknessMm: 0.76, lengthPerBox: '30 m', cartonDimsCm: '32 × 26 × 36', boxesPerCarton: 10, netWeightKg: 29,  grossWeightKg: 30,   cartonVolumeM3: 0.02995 },
@@ -75,7 +97,8 @@
     cartonVolumeM3: avg(STRAP_VARIANTS.map(function (v) { return v.cartonVolumeM3; })),
     netWeightPerCartonKg: +avg(STRAP_VARIANTS.map(function (v) { return v.netWeightKg; })).toFixed(1),
     grossWeightPerCartonKg: +avg(STRAP_VARIANTS.map(function (v) { return v.grossWeightKg; })).toFixed(1),
-    variants: STRAP_VARIANTS
+    variants: STRAP_VARIANTS,
+    packaging: STRAP_PACKAGING
   };
 
   var earBuckleFlat = {

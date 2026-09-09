@@ -481,6 +481,27 @@ img { max-width: 100%; height: auto; display: block; }
 .est-row-unit { font-size: 13px; color: var(--text-light, #5a6b7e); }
 .est-row-derived { text-align: right; font-size: 13px; min-width: 0; }
 
+/* Packaging note (strap only: plastic box vs paper box) */
+.est-packaging {
+  font-size: 12px;
+  color: var(--text-light, #5a6b7e);
+  margin-top: 6px;
+  padding: 6px 9px;
+  border-left: 3px solid var(--accent, #1a3760);
+  background: #f5f7fa;
+  border-radius: 4px;
+  line-height: 1.5;
+}
+.est-packaging-label {
+  font-weight: 600;
+  color: var(--accent, #1a3760);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  font-size: 10px;
+  margin-right: 4px;
+}
+.est-packaging-pending { color: #b7791f; font-weight: 500; }
+
 /* Variant size chips (shown after a product with multiple variants is checked) */
 .est-row-variants {
   display: flex;
