@@ -1,5 +1,12 @@
 /* ============================================================
- * Maxband Carton Estimator — with pricing & MOQ
+ * Maxband Carton Estimator — per-variant rows (B2B wholesale)
+ *
+ * Each variant (width/size) of a product gets its own row with its
+ * own checkbox + boxes input, so a buyer can independently select
+ * and quantity different widths within the same product family
+ * (e.g. SS201 Strap: 3/8"-200 boxes, 1/2"-100 boxes, 5/8"-400 boxes,
+ * 3/4"-500 boxes — all in one inquiry).
+ *
  * Reads from window.MAXXBAND_SPECS, window.MAXXBAND_CONTAINERS,
  * window.MAXXBAND_PRICE (loaded via /assets/data/price-list.json)
  * ============================================================ */
@@ -19,7 +26,7 @@
   /* -------- Find tier price for quantity -------- */
   function tierPrice(productKey, boxes) {
     const product = priceList.products[productKey];
-    if (!product) return { unitPrice: 0, tierLabel: '—', perUnit: '' };
+    if (!product) return { unitPrice: 0, tierLabel: '—', perUnit: '', moqBoxes: 0, baseUnitPrice: 0 };
     const tiers = product.priceTiers && product.priceTiers.length ? product.priceTiers : [{ minBoxes: 0, unitPrice: product.unitPrice }];
     const sorted = [...tiers].sort((a, b) => a.minBoxes - b.minBoxes);
     let chosen = sorted[0];
@@ -40,31 +47,42 @@
     };
   }
 
-  /* -------- UI rendering: product list -------- */
+  /* -------- Build product groups (one product → N variant rows) -------- */
+  const productGroups = []; // [{ key, product, rows: [{ variantIdx, variant }] }]
+  Object.keys(specs).forEach((key) => {
+    const p = specs[key];
+    const group = { key, product: p, rows: [] };
+    if (p.hasVariants && p.variants && p.variants.length > 0) {
+      p.variants.forEach((v, idx) => {
+        group.rows.push({ variantIdx: idx, variant: v });
+      });
+    } else {
+      group.rows.push({ variantIdx: null, variant: null });
+    }
+    productGroups.push(group);
+  });
+
+  /* -------- UI rendering -------- */
   const productListEl = document.getElementById('product-list');
   if (!productListEl) return;
 
-  Object.keys(specs).forEach((key) => {
-    const p = specs[key];
-    const pz = priceList.products[key];
-    const unitPrice = pz ? pz.unitPrice : 0;
-    const perUnit = pz ? pz.perUnit : '';
-    const moq = pz ? pz.moqBoxes : 0;
+  productGroups.forEach(({ key, product: p, rows }) => {
+    const isMultiVariant = rows.length > 1;
+    const hasHeader = isMultiVariant || !!p.packaging || !!(p.placeholder && p.placeholder.pending);
 
-    const row = document.createElement('div');
-    row.className = 'est-row';
-    row.dataset.product = key;
-    row.dataset.selectedVariantIdx = (p.hasVariants && p.variants && p.variants.length === 1) ? '0' : '';
-    row.innerHTML = `
-      <div class="est-row-main">
-        <label class="est-checkbox">
-          <input type="checkbox" data-product="${key}" />
-          <span class="est-row-name">${p.shortName}</span>
-        </label>
-        <div class="est-row-meta">
-          ${p.unitsPerBox} per box &middot; ${p.boxesPerCarton} boxes/ctn
-          ${pz ? ` &middot; <strong>${priceList.currency} ${unitPrice.toFixed(2)}</strong> / ${perUnit}` : ''}
-        </div>
+    const groupEl = document.createElement('div');
+    groupEl.className = 'est-product-group';
+    groupEl.dataset.product = key;
+
+    /* Group header (product name, units, packaging, pending note) */
+    if (hasHeader) {
+      const headerEl = document.createElement('div');
+      headerEl.className = 'est-product-group-header';
+      let metaBits = [`${p.unitsPerBox} per box`];
+      if (isMultiVariant) metaBits.push(`${rows.length} sizes available`);
+      headerEl.innerHTML = `
+        <div class="est-product-group-name">${p.shortName}</div>
+        <div class="est-product-group-meta">${metaBits.join(' · ')}</div>
         ${p.packaging ? `
           <div class="est-packaging">
             <span class="est-packaging-label">Packaging:</span>
@@ -72,195 +90,177 @@
             ${p.packaging.paper && p.packaging.paper.pending ? `<span class="est-packaging-pending">&middot; ${p.packaging.paper.label} specs pending</span>` : ''}
           </div>
         ` : ''}
-        ${(p.hasVariants && p.variants && p.variants.length > 1) ? `
-          <div class="est-row-variants" data-role="variant-chips" hidden>
-            <span class="est-variant-label">Choose size:</span>
-            ${p.variants.map((v, idx) => {
-              const variantLabel = v.width ? v.width + (v.thicknessMm ? ` · ${v.thicknessMm}mm thick` : '') :
-                                   v.sizeLabel ? v.sizeLabel :
-                                   v.model ? v.model :
-                                   ('Variant ' + (idx + 1));
-              return `<button type="button" class="est-variant-chip" data-product="${key}" data-variant-idx="${idx}" title="${v.cartonDimsCm} · ${v.netWeightKg}/${v.grossWeightKg} kg per carton">${variantLabel}</button>`;
-            }).join('')}
-          </div>
-        ` : ''}
-        <div class="est-row-moq" data-role="moq-tag" hidden>
-          MOQ: <span data-role="moq-num"></span> boxes
-        </div>
-        ${p.placeholder && p.placeholder.pending ? `<div class="est-row-pending" data-role="pending-tag">Carton specs pending internal confirmation</div>` : ''}
-      </div>
-      <div class="est-row-input">
-        <input type="number" min="0" step="10" placeholder="0"
-               data-product="${key}" data-role="boxes"
-               disabled />
-        <span class="est-row-unit">boxes</span>
-      </div>
-      <div class="est-row-derived" data-role="derived">
-        <span class="derived-empty">—</span>
-      </div>
-    `;
-    productListEl.appendChild(row);
-
-    if (pz && moq > 0) {
-      const tag = row.querySelector('[data-role="moq-tag"]');
-      tag.querySelector('[data-role="moq-num"]').textContent = moq;
-      tag.hidden = false;
+        ${p.variantNote ? `<div class="est-variant-note">${p.variantNote}</div>` : ''}
+        ${(p.placeholder && p.placeholder.pending) ? `<div class="est-product-group-pending">&#9888; ${p.placeholder.note}</div>` : ''}
+      `;
+      groupEl.appendChild(headerEl);
     }
+
+    /* Variant rows */
+    rows.forEach(({ variantIdx, variant: v }) => {
+      let variantLabel, variantMeta;
+      if (v) {
+        variantLabel = v.width || v.factoryLabel || v.model || ('Variant ' + ((variantIdx || 0) + 1));
+        const parts = [];
+        if (v.factoryLabel && v.width && v.factoryLabel !== v.width) parts.push(v.factoryLabel);
+        if (v.thicknessMm) parts.push(v.thicknessMm + 'mm thick');
+        if (v.lengthPerBox) parts.push(v.lengthPerBox + ' per box');
+        if (!v.lengthPerBox && p.unitsPerBox && (!v.unitsPerBox || v.unitsPerBox === 1)) parts.push(p.unitsPerBox + ' per box');
+        const bpc = v.boxesPerCarton || p.boxesPerCarton;
+        if (bpc) parts.push(bpc + ' boxes/ctn');
+        variantMeta = parts.join(' · ');
+      } else {
+        variantLabel = p.shortName;
+        variantMeta = `${p.unitsPerBox} per box · ${p.boxesPerCarton} boxes/ctn`;
+      }
+
+      const pz = priceList.products[key];
+      const unitPrice = pz ? pz.unitPrice : 0;
+      const perUnit = pz ? pz.perUnit : '';
+      const moq = pz ? pz.moqBoxes : 0;
+
+      const row = document.createElement('div');
+      row.className = 'est-row';
+      row.dataset.product = key;
+      if (variantIdx !== null) row.dataset.variantIdx = String(variantIdx);
+      if (v && v.pending) row.dataset.pending = '1';
+
+      const variantAttr = variantIdx !== null ? ` data-variant-idx="${variantIdx}"` : '';
+
+      row.innerHTML = `
+        <div class="est-row-main">
+          <label class="est-checkbox">
+            <input type="checkbox" data-product="${key}"${variantAttr} />
+            <span class="est-row-name">${variantLabel}</span>
+          </label>
+          <div class="est-row-meta">
+            ${variantMeta}
+            ${pz ? ` &middot; <strong>${priceList.currency} ${unitPrice.toFixed(2)}</strong> / ${perUnit}` : ''}
+          </div>
+          ${moq > 0 ? `<div class="est-row-moq" data-role="moq-tag">MOQ: <span data-role="moq-num">${moq}</span> boxes</div>` : ''}
+          ${(v && v.pending) ? `<div class="est-row-pending" data-role="pending-tag">Carton specs pending</div>` : ''}
+        </div>
+        <div class="est-row-input">
+          <input type="number" min="0" step="10" placeholder="0"
+                 data-product="${key}"${variantAttr} data-role="boxes"
+                 disabled />
+          <span class="est-row-unit">boxes</span>
+        </div>
+        <div class="est-row-derived" data-role="derived">
+          <span class="derived-empty">&mdash;</span>
+        </div>
+      `;
+      groupEl.appendChild(row);
+    });
+
+    productListEl.appendChild(groupEl);
   });
 
   /* -------- Event wiring -------- */
-  function needsVariantSelection(p) {
-    return !!(p.hasVariants && p.variants && p.variants.length > 1);
+  function inputForRow(rowEl) {
+    return rowEl.querySelector('input[data-role="boxes"]');
   }
-  function needsVariantSelectionByKey(key) {
-    return needsVariantSelection(specs[key]);
-  }
-  function hasVariantSelected(key) {
-    const rowEl = productListEl.querySelector(`.est-row[data-product="${key}"]`);
-    return !!(rowEl && rowEl.dataset.selectedVariantIdx !== '' && rowEl.dataset.selectedVariantIdx !== undefined);
-  }
-  function setVariantSelected(key, idx) {
-    const rowEl = productListEl.querySelector(`.est-row[data-product="${key}"]`);
-    if (!rowEl) return;
-    rowEl.dataset.selectedVariantIdx = idx === null ? '' : String(idx);
-    rowEl.querySelectorAll('.est-variant-chip').forEach((c) => {
-      c.classList.toggle('est-variant-chip-active', String(idx) === c.dataset.variantIdx);
-    });
+  function checkboxForRow(rowEl) {
+    return rowEl.querySelector('input[type="checkbox"]');
   }
 
   productListEl.addEventListener('change', (e) => {
     const key = e.target.dataset.product;
     if (!key) return;
-    const checkbox = productListEl.querySelector(`input[type="checkbox"][data-product="${key}"]`);
-    const input    = productListEl.querySelector(`input[data-role="boxes"][data-product="${key}"]`);
-    const rowEl    = productListEl.querySelector(`.est-row[data-product="${key}"]`);
-    const chipsEl  = rowEl.querySelector('[data-role="variant-chips"]');
-
+    const rowEl = e.target.closest('.est-row');
+    if (!rowEl) return;
+    const input = inputForRow(rowEl);
     if (e.target.type === 'checkbox') {
-      if (checkbox.checked) {
-        if (needsVariantSelectionByKey(key)) {
-          // Show variant chips; boxes stays disabled until user picks one
-          if (chipsEl) chipsEl.hidden = false;
-          input.disabled = true;
-          if (!hasVariantSelected(key)) {
-            input.value = '';
-            input.blur();
-          }
+      if (e.target.checked) {
+        input.disabled = false;
+        input.focus();
       } else {
-          if (chipsEl) chipsEl.hidden = true;
-          input.disabled = false;
-          input.focus();
-        }
-      } else {
-        // Unchecked: collapse & clear
-        if (chipsEl) chipsEl.hidden = true;
-        setVariantSelected(key, null);
         input.value = '';
         input.disabled = true;
       }
-      recompute();
-    } else if (e.target.dataset.role === 'boxes') {
-      recompute();
     }
+    recompute();
   });
 
   productListEl.addEventListener('input', (e) => {
     if (e.target.dataset.role === 'boxes') recompute();
   });
 
-  // Variant chip click → select variant, enable boxes input
-  productListEl.addEventListener('click', (e) => {
-    const chip = e.target.closest('.est-variant-chip');
-    if (!chip) return;
-    const key = chip.dataset.product;
-    if (!key) return;
-    setVariantSelected(key, chip.dataset.variantIdx);
-    const input = productListEl.querySelector(`input[data-role="boxes"][data-product="${key}"]`);
-    if (input) { input.disabled = false; input.focus(); }
-    recompute();
-  });
-
   document.getElementById('reset-btn').addEventListener('click', () => {
-    productListEl.querySelectorAll('input[type="checkbox"]').forEach(c => c.checked = false);
-    productListEl.querySelectorAll('input[data-role="boxes"]').forEach(i => { i.value = ''; i.disabled = true; });
-    productListEl.querySelectorAll('[data-role="variant-chips"]').forEach(el => { el.hidden = true; });
-    productListEl.querySelectorAll('.est-row').forEach(r => { r.dataset.selectedVariantIdx = ''; });
-    productListEl.querySelectorAll('.est-variant-chip').forEach(c => c.classList.remove('est-variant-chip-active'));
+    productListEl.querySelectorAll('input[type="checkbox"]').forEach((c) => { c.checked = false; });
+    productListEl.querySelectorAll('input[data-role="boxes"]').forEach((i) => { i.value = ''; i.disabled = true; });
+    productListEl.querySelectorAll('.est-row').forEach((r) => r.classList.remove('row-moq-warn', 'row-pending-warn'));
     recompute();
   });
 
-  /* -------- Core computation -------- */
+  /* -------- Core computation (per-row, aggregates to totals) -------- */
   function recompute() {
     const selected = [];
-    let totalCartons = 0;
-    let totalVolume = 0;
-    let totalNet = 0;
-    let totalGross = 0;
-    let totalSubtotal = 0;
+    let totalCartons = 0, totalVolume = 0, totalNet = 0, totalGross = 0, totalSubtotal = 0;
     const moqViolations = [];
 
-    Object.keys(specs).forEach((key) => {
+    productListEl.querySelectorAll('.est-row').forEach((rowEl) => {
+      const key = rowEl.dataset.product;
+      const variantIdxStr = rowEl.dataset.variantIdx;
+      const variantIdx = variantIdxStr !== undefined ? parseInt(variantIdxStr, 10) : null;
       const p = specs[key];
-      const checkbox = productListEl.querySelector(`input[type="checkbox"][data-product="${key}"]`);
-      const input    = productListEl.querySelector(`input[data-role="boxes"][data-product="${key}"]`);
-      const derivedEl = productListEl.querySelector(`.est-row[data-product="${key}"] [data-role="derived"]`);
-      const rowEl     = productListEl.querySelector(`.est-row[data-product="${key}"]`);
+      const checkbox = checkboxForRow(rowEl);
+      const input = inputForRow(rowEl);
+      const derivedEl = rowEl.querySelector('[data-role="derived"]');
+
       if (!checkbox.checked) {
-        derivedEl.innerHTML = '<span class="derived-empty">—</span>';
-        rowEl.classList.remove('row-moq-warn');
-        rowEl.classList.remove('row-pending-warn');
+        derivedEl.innerHTML = '<span class="derived-empty">&mdash;</span>';
+        rowEl.classList.remove('row-moq-warn', 'row-pending-warn');
         return;
       }
-      // Pick effective spec: top-level OR selected variant
-      let eff = {
-        unitsPerBox: p.unitsPerBox,
-        boxesPerCarton: p.boxesPerCarton,
-        cartonDimsCm: p.cartonDimsCm,
-        cartonVolumeM3: p.cartonVolumeM3,
-        netWeightPerCartonKg: p.netWeightPerCartonKg,
-        grossWeightPerCartonKg: p.grossWeightPerCartonKg
-      };
-      let variantLabel = '';
-      if (needsVariantSelectionByKey(key)) {
-        const idxStr = rowEl.dataset.selectedVariantIdx;
-        if (idxStr === '' || idxStr === undefined) {
-          derivedEl.innerHTML = '<span class="derived-empty">Pick a size above first</span>';
-          rowEl.classList.remove('row-moq-warn');
-          rowEl.classList.remove('row-pending-warn');
-          return;
+
+      // Resolve effective spec — variant if available, else top-level fallback
+      let eff, variantLabel;
+      if (variantIdx !== null && p.variants && p.variants[variantIdx]) {
+        const v = p.variants[variantIdx];
+        if (v.pending) {
+          // Pending variant: use top-level aggregate defaults, flag in UI/message
+          eff = {
+            boxesPerCarton: p.boxesPerCarton || 10,
+            cartonDimsCm: p.cartonDimsCm,
+            cartonVolumeM3: p.cartonVolumeM3,
+            netWeightPerCartonKg: p.netWeightPerCartonKg,
+            grossWeightPerCartonKg: p.grossWeightPerCartonKg,
+            pending: true
+          };
+        } else {
+          eff = {
+            boxesPerCarton: v.boxesPerCarton,
+            cartonDimsCm: v.cartonDimsCm,
+            cartonVolumeM3: v.cartonVolumeM3,
+            netWeightPerCartonKg: v.netWeightKg,
+            grossWeightPerCartonKg: v.grossWeightKg
+          };
         }
-        const v = p.variants[parseInt(idxStr, 10)];
-        if (!v) return;
-        eff = {
-          unitsPerBox: p.unitsPerBox,
-          boxesPerCarton: v.boxesPerCarton,
-          cartonDimsCm: v.cartonDimsCm,
-          cartonVolumeM3: v.cartonVolumeM3,
-          netWeightPerCartonKg: v.netWeightKg,
-          grossWeightPerCartonKg: v.grossWeightKg
-        };
-        variantLabel = v.width || v.sizeLabel || v.model || '';
+        variantLabel = v.width || v.factoryLabel || v.model || '';
       } else if (p.variants && p.variants.length === 1) {
         const v = p.variants[0];
         eff = {
-          unitsPerBox: p.unitsPerBox,
           boxesPerCarton: v.boxesPerCarton,
           cartonDimsCm: v.cartonDimsCm,
           cartonVolumeM3: v.cartonVolumeM3,
           netWeightPerCartonKg: v.netWeightKg,
           grossWeightPerCartonKg: v.grossWeightKg
         };
-        variantLabel = v.model || '';
+        variantLabel = v.model || v.factoryLabel || '';
+      } else {
+        eff = {
+          boxesPerCarton: p.boxesPerCarton,
+          cartonDimsCm: p.cartonDimsCm,
+          cartonVolumeM3: p.cartonVolumeM3,
+          netWeightPerCartonKg: p.netWeightPerCartonKg,
+          grossWeightPerCartonKg: p.grossWeightPerCartonKg
+        };
+        variantLabel = '';
       }
 
       const boxes = Math.max(0, parseInt(input.value, 10) || 0);
-      if (boxes === 0) {
-        derivedEl.innerHTML = '<span class="derived-empty">0 cartons</span>';
-        rowEl.classList.remove('row-moq-warn');
-        rowEl.classList.remove('row-pending-warn');
-        return;
-      }
-      const cartons = Math.ceil(boxes / eff.boxesPerCarton);
+      const cartons = boxes > 0 ? Math.ceil(boxes / eff.boxesPerCarton) : 0;
       const volume = cartons * eff.cartonVolumeM3;
       const net = cartons * eff.netWeightPerCartonKg;
       const gross = cartons * eff.grossWeightPerCartonKg;
@@ -273,25 +273,37 @@
       totalGross += gross;
       totalSubtotal += subtotal;
 
-      if (tier.moqBoxes > 0 && boxes < tier.moqBoxes) {
-        moqViolations.push({ key, name: p.shortName, boxes, moq: tier.moqBoxes });
+      let moqWarn = false;
+      if (tier.moqBoxes > 0 && boxes > 0 && boxes < tier.moqBoxes) {
+        moqViolations.push({ key, name: p.shortName, variantLabel, boxes, moq: tier.moqBoxes });
         rowEl.classList.add('row-moq-warn');
+        moqWarn = true;
       } else {
         rowEl.classList.remove('row-moq-warn');
       }
-      if (p.placeholder && p.placeholder.pending) {
+      if (eff.pending) {
         rowEl.classList.add('row-pending-warn');
       } else {
         rowEl.classList.remove('row-pending-warn');
       }
 
-      const variantSuffix = variantLabel ? ` <span class="derived-variant">· ${variantLabel}</span>` : '';
-      derivedEl.innerHTML = `
-        <div class="derived-num">${cartons} ctn${variantSuffix}</div>
-        <div class="derived-sub">${volume.toFixed(3)} m³ &middot; ${gross.toFixed(1)} kg</div>
-        ${priceList.products[key] ? `<div class="derived-price">${priceList.currency} ${subtotal.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</div>
-        <div class="derived-tier">${tier.tierLabel}</div>` : ''}
-      `;
+      // Derived display
+      if (boxes === 0) {
+        derivedEl.innerHTML = '<span class="derived-empty">0 cartons</span>';
+      } else if (eff.pending) {
+        derivedEl.innerHTML = `
+          <div class="derived-num">${cartons} ctn <span class="derived-pending-tag">preliminary</span></div>
+          <div class="derived-sub">~${volume.toFixed(3)} m³ &middot; ~${gross.toFixed(1)} kg</div>
+          ${priceList.products[key] ? `<div class="derived-price">${priceList.currency} ${subtotal.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</div>` : ''}
+        `;
+      } else {
+        derivedEl.innerHTML = `
+          <div class="derived-num">${cartons} ctn</div>
+          <div class="derived-sub">${volume.toFixed(3)} m³ &middot; ${gross.toFixed(1)} kg</div>
+          ${priceList.products[key] ? `<div class="derived-price">${priceList.currency} ${subtotal.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</div>
+          <div class="derived-tier">${tier.tierLabel}</div>` : ''}
+        `;
+      }
 
       selected.push({
         key,
@@ -299,7 +311,7 @@
         variantLabel,
         boxes,
         boxesPerCarton: eff.boxesPerCarton,
-        unitsPerBox: eff.unitsPerBox,
+        unitsPerBox: p.unitsPerBox,
         cartons,
         volume,
         net,
@@ -308,17 +320,29 @@
         perUnit: tier.perUnit,
         subtotal,
         moqBoxes: tier.moqBoxes,
-        belowMoq: tier.moqBoxes > 0 && boxes < tier.moqBoxes
+        belowMoq: moqWarn,
+        pendingSpec: !!eff.pending,
+        tierLabel: tier.tierLabel
       });
     });
 
     renderSummary(selected, { totalCartons, totalVolume, totalNet, totalGross, totalSubtotal }, moqViolations);
   }
 
+  /* -------- Group selected rows by product for summary / inquiry -------- */
+  function groupByProduct(selected) {
+    const map = {};
+    selected.forEach((s) => {
+      if (!map[s.key]) map[s.key] = { name: s.name, items: [] };
+      map[s.key].items.push(s);
+    });
+    return map;
+  }
+
   /* -------- Summary rendering -------- */
   function renderSummary(selected, totals, moqViolations) {
     const emptyEl = document.getElementById('summary-empty');
-    const bodyEl  = document.getElementById('summary-body');
+    const bodyEl = document.getElementById('summary-body');
     if (totals.totalCartons === 0) {
       emptyEl.style.display = '';
       bodyEl.hidden = true;
@@ -327,18 +351,28 @@
     emptyEl.style.display = 'none';
     bodyEl.hidden = false;
 
-    // Per-product breakdown
+    // Per-product breakdown (grouped)
     const breakdownEl = document.getElementById('summary-breakdown');
-    breakdownEl.innerHTML = selected.map(s => `
-      <div class="breakdown-row${s.belowMoq ? ' breakdown-warn' : ''}">
-        <div class="breakdown-name">${s.name}${s.belowMoq ? ' <span class="warn-pill">below MOQ</span>' : ''}</div>
-        <div class="breakdown-detail">
-          ${s.boxes.toLocaleString()} boxes × ${s.unitsPerBox} → <strong>${s.cartons}</strong> cartons &middot; ${s.volume.toFixed(3)} m³ &middot; ${s.gross.toFixed(1)} kg
-          ${priceList.products[s.key] ? `<br>Unit ${priceList.currency} ${s.unitPrice.toFixed(2)} / ${s.perUnit} &middot; <strong>Subtotal ${priceList.currency} ${s.subtotal.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</strong>` : ''}
-          ${s.belowMoq ? `<br><span class="warn-text">MOQ is ${s.moqBoxes} boxes &mdash; you selected ${s.boxes}. We'll still quote, but lead time may be longer.</span>` : ''}
+    const byProduct = groupByProduct(selected);
+    const groupKeys = Object.keys(byProduct);
+
+    breakdownEl.innerHTML = groupKeys.map((gKey) => {
+      const { name, items } = byProduct[gKey];
+      return `
+        <div class="breakdown-group">
+          <div class="breakdown-group-name">${name}</div>
+          ${items.map((s) => `
+            <div class="breakdown-row${s.belowMoq ? ' breakdown-warn' : ''}${s.pendingSpec ? ' breakdown-pending' : ''}">
+              <div class="breakdown-detail">
+                ${s.variantLabel ? `<strong>${s.variantLabel}</strong> &middot; ` : ''}${s.boxes.toLocaleString()} boxes × ${s.unitsPerBox} &rarr; <strong>${s.cartons}</strong> cartons &middot; ${s.volume.toFixed(3)} m³ &middot; ${s.gross.toFixed(1)} kg${s.pendingSpec ? ' <span class="preliminary-pill">preliminary</span>' : ''}
+                ${priceList.products[s.key] ? `<br>Unit ${priceList.currency} ${s.unitPrice.toFixed(2)} / ${s.perUnit} &middot; <strong>Subtotal ${priceList.currency} ${s.subtotal.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</strong>` : ''}
+                ${s.belowMoq ? `<br><span class="warn-text">MOQ is ${s.moqBoxes} boxes &mdash; you selected ${s.boxes}. We'll still quote, but lead time may be longer.</span>` : ''}
+              </div>
+            </div>
+          `).join('')}
         </div>
-      </div>
-    `).join('');
+      `;
+    }).join('');
 
     // Totals
     document.getElementById('total-cartons').textContent = totals.totalCartons.toLocaleString();
@@ -356,7 +390,7 @@
         moqEl.innerHTML = `
           <div class="moq-card">
             <div class="moq-title">⚠️ Below MOQ</div>
-            <ul>${moqViolations.map(v => `<li><strong>${v.name}</strong>: ${v.boxes} boxes (MOQ is ${v.moq} boxes)</li>`).join('')}</ul>
+            <ul>${moqViolations.map((v) => `<li><strong>${v.name}${v.variantLabel ? ' — ' + v.variantLabel : ''}</strong>: ${v.boxes} boxes (MOQ is ${v.moq} boxes)</li>`).join('')}</ul>
             <div class="moq-note">We'll still send a quotation — MOQ is a lead-time / cost guideline, not a hard rule.</div>
           </div>`;
       } else {
@@ -444,7 +478,7 @@
     `;
   }
 
-  /* -------- Inquiry message construction -------- */
+  /* -------- Inquiry message construction (grouped by product) -------- */
   function buildMessage(selected, totals, moqViolations) {
     const lines = [];
     lines.push('Hello Maxband,');
@@ -453,33 +487,37 @@
     lines.push('');
 
     if (moqViolations.length > 0) {
-      lines.push('Note: One or more products are below MOQ — please confirm feasibility.');
+      lines.push('Note: One or more line items are below MOQ — please confirm feasibility.');
       lines.push('');
     }
 
-    /* Detect SS201 Screw Lock (packaging specs still pending) */
-    const pendingProducts = selected.filter(s => {
-      const spec = window.MAXXBAND_SPECS && window.MAXXBAND_SPECS[s.key];
-      return spec && spec.placeholder && spec.placeholder.pending;
-    });
-    if (pendingProducts.length > 0) {
-      const names = pendingProducts.map(p => p.name).join(', ');
-      lines.push('Note: Carton & shipping specs for ' + names + ' are still pending internal confirmation. Carton volume / weight shown above are preliminary placeholders — final figures will be confirmed at quotation.');
+    const pendingItems = selected.filter((s) => s.pendingSpec);
+    if (pendingItems.length > 0) {
+      const names = [...new Set(pendingItems.map((p) => p.name))].join(', ');
+      lines.push('Note: Carton & shipping specs for ' + names + ' are still pending internal confirmation. Carton volume / weight shown for those items are preliminary placeholders — final figures will be confirmed at quotation.');
       lines.push('');
     }
 
     lines.push('━━━ Order Summary ━━━');
     lines.push('');
-    selected.forEach(s => {
-      const variantPart = s.variantLabel ? ` (${s.variantLabel})` : '';
-      lines.push(`• ${s.name}${variantPart}${s.belowMoq ? '  [below MOQ]' : ''}`);
-      lines.push(`    ${s.boxes.toLocaleString()} boxes × ${s.unitsPerBox} → ${s.cartons} export carton(s)`);
-      lines.push(`    ${s.volume.toFixed(3)} m³ · ${s.gross.toFixed(1)} kg (gross)`);
-      if (priceList.products[s.key]) {
-        lines.push(`    Unit ${priceList.currency} ${s.unitPrice.toFixed(2)} / ${s.perUnit}`);
-        lines.push(`    Subtotal ${priceList.currency} ${s.subtotal.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}`);
-      }
-      lines.push('');
+
+    const byProduct = groupByProduct(selected);
+    Object.keys(byProduct).forEach((gKey) => {
+      const { name, items } = byProduct[gKey];
+      lines.push(`▸ ${name}`);
+      items.forEach((s) => {
+        const variantPart = s.variantLabel ? ` (${s.variantLabel})` : '';
+        const pendingTag = s.pendingSpec ? '  [preliminary carton specs]' : '';
+        const moqTag = s.belowMoq ? '  [below MOQ]' : '';
+        lines.push(`    • ${s.variantLabel || '—'}${variantPart}${moqTag}${pendingTag}`);
+        lines.push(`      ${s.boxes.toLocaleString()} boxes × ${s.unitsPerBox} → ${s.cartons} export carton(s)`);
+        lines.push(`      ${s.volume.toFixed(3)} m³ · ${s.gross.toFixed(1)} kg (gross)${s.pendingSpec ? ' — preliminary' : ''}`);
+        if (priceList.products[s.key]) {
+          lines.push(`      Unit ${priceList.currency} ${s.unitPrice.toFixed(2)} / ${s.perUnit}`);
+          lines.push(`      Subtotal ${priceList.currency} ${s.subtotal.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}`);
+        }
+        lines.push('');
+      });
     });
 
     lines.push('━━━ Totals ━━━');
@@ -548,54 +586,65 @@
     setTimeout(() => { span.textContent = original; }, 1800);
   }
 
+  /* -------- Re-read totals from DOM (for clipboard action) -------- */
   function readCurrentTotals() {
     let totalCartons = 0, totalVolume = 0, totalNet = 0, totalGross = 0, totalSubtotal = 0;
     const selected = [];
     const moqViolations = [];
-    Object.keys(specs).forEach((key) => {
+    productListEl.querySelectorAll('.est-row').forEach((rowEl) => {
+      const key = rowEl.dataset.product;
+      const variantIdxStr = rowEl.dataset.variantIdx;
+      const variantIdx = variantIdxStr !== undefined ? parseInt(variantIdxStr, 10) : null;
       const p = specs[key];
-      const checkbox = productListEl.querySelector(`input[type="checkbox"][data-product="${key}"]`);
-      const input    = productListEl.querySelector(`input[data-role="boxes"][data-product="${key}"]`);
-      const rowEl    = productListEl.querySelector(`.est-row[data-product="${key}"]`);
+      const checkbox = checkboxForRow(rowEl);
+      const input = inputForRow(rowEl);
       if (!checkbox.checked) return;
 
-      // Same variant resolution as recompute()
-      let eff = {
-        unitsPerBox: p.unitsPerBox,
-        boxesPerCarton: p.boxesPerCarton,
-        cartonVolumeM3: p.cartonVolumeM3,
-        netWeightPerCartonKg: p.netWeightPerCartonKg,
-        grossWeightPerCartonKg: p.grossWeightPerCartonKg
-      };
-      let variantLabel = '';
-      if (needsVariantSelectionByKey(key)) {
-        const idxStr = rowEl.dataset.selectedVariantIdx;
-        if (idxStr === '' || idxStr === undefined) return;
-        const v = p.variants[parseInt(idxStr, 10)];
-        if (!v) return;
-        eff = {
-          unitsPerBox: p.unitsPerBox,
-          boxesPerCarton: v.boxesPerCarton,
-          cartonVolumeM3: v.cartonVolumeM3,
-          netWeightPerCartonKg: v.netWeightKg,
-          grossWeightPerCartonKg: v.grossWeightKg
-        };
-        variantLabel = v.width || v.sizeLabel || v.model || '';
+      let eff, variantLabel;
+      if (variantIdx !== null && p.variants && p.variants[variantIdx]) {
+        const v = p.variants[variantIdx];
+        if (v.pending) {
+          eff = {
+            boxesPerCarton: p.boxesPerCarton || 10,
+            cartonDimsCm: p.cartonDimsCm,
+            cartonVolumeM3: p.cartonVolumeM3,
+            netWeightPerCartonKg: p.netWeightPerCartonKg,
+            grossWeightPerCartonKg: p.grossWeightPerCartonKg,
+            pending: true
+          };
+        } else {
+          eff = {
+            boxesPerCarton: v.boxesPerCarton,
+            cartonDimsCm: v.cartonDimsCm,
+            cartonVolumeM3: v.cartonVolumeM3,
+            netWeightPerCartonKg: v.netWeightKg,
+            grossWeightPerCartonKg: v.grossWeightKg
+          };
+        }
+        variantLabel = v.width || v.factoryLabel || v.model || '';
       } else if (p.variants && p.variants.length === 1) {
         const v = p.variants[0];
         eff = {
-          unitsPerBox: p.unitsPerBox,
           boxesPerCarton: v.boxesPerCarton,
+          cartonDimsCm: v.cartonDimsCm,
           cartonVolumeM3: v.cartonVolumeM3,
           netWeightPerCartonKg: v.netWeightKg,
           grossWeightPerCartonKg: v.grossWeightKg
         };
-        variantLabel = v.model || '';
+        variantLabel = v.model || v.factoryLabel || '';
+      } else {
+        eff = {
+          boxesPerCarton: p.boxesPerCarton,
+          cartonDimsCm: p.cartonDimsCm,
+          cartonVolumeM3: p.cartonVolumeM3,
+          netWeightPerCartonKg: p.netWeightPerCartonKg,
+          grossWeightPerCartonKg: p.grossWeightPerCartonKg
+        };
+        variantLabel = '';
       }
 
       const boxes = Math.max(0, parseInt(input.value, 10) || 0);
-      if (boxes === 0) return;
-      const cartons = Math.ceil(boxes / eff.boxesPerCarton);
+      const cartons = boxes > 0 ? Math.ceil(boxes / eff.boxesPerCarton) : 0;
       const volume = cartons * eff.cartonVolumeM3;
       const net = cartons * eff.netWeightPerCartonKg;
       const gross = cartons * eff.grossWeightPerCartonKg;
@@ -606,16 +655,18 @@
       totalNet += net;
       totalGross += gross;
       totalSubtotal += subtotal;
-      if (tier.moqBoxes > 0 && boxes < tier.moqBoxes) {
-        moqViolations.push({ key, name: p.shortName, boxes, moq: tier.moqBoxes });
+      if (tier.moqBoxes > 0 && boxes > 0 && boxes < tier.moqBoxes) {
+        moqViolations.push({ key, name: p.shortName, variantLabel, boxes, moq: tier.moqBoxes });
       }
       selected.push({
         key, name: p.shortName, variantLabel,
-        boxes, boxesPerCarton: eff.boxesPerCarton, unitsPerBox: eff.unitsPerBox,
+        boxes, boxesPerCarton: eff.boxesPerCarton, unitsPerBox: p.unitsPerBox,
         cartons, volume, net, gross,
         unitPrice: tier.unitPrice, perUnit: tier.perUnit, subtotal,
         moqBoxes: tier.moqBoxes,
-        belowMoq: tier.moqBoxes > 0 && boxes < tier.moqBoxes
+        belowMoq: tier.moqBoxes > 0 && boxes > 0 && boxes < tier.moqBoxes,
+        pendingSpec: !!eff.pending,
+        tierLabel: tier.tierLabel
       });
     });
     if (totalCartons === 0) return null;
