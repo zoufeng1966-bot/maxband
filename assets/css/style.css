@@ -657,7 +657,11 @@ img { max-width: 100%; height: auto; display: block; }
 .container-block { margin-bottom: 14px; }
 .container-block:last-child { margin-bottom: 0; }
 .container-head { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-light, #5a6b7e); margin-bottom: 6px; }
+.bar-row { display: flex; align-items: center; gap: 10px; margin-top: 4px; }
+.bar-label { font-size: 11px; color: var(--text-light, #5a6b7e); min-width: 50px; text-transform: uppercase; letter-spacing: .04em; }
+.bar-pct { font-size: 11px; color: var(--text-light, #5a6b7e); min-width: 52px; text-align: right; font-variant-numeric: tabular-nums; }
 .bar-track {
+  flex: 1;
   height: 10px;
   background: #f0f2f5;
   border-radius: 5px;
@@ -668,6 +672,7 @@ img { max-width: 100%; height: auto; display: block; }
   background: linear-gradient(90deg, #1a3760, #2a5fa0);
   transition: width .25s ease;
 }
+.bar-binding { background: linear-gradient(90deg, #c89a3a, #e0b060); }
 .bar-over { background: linear-gradient(90deg, #c84a4a, #e07070); }
 
 /* Recommendation card */

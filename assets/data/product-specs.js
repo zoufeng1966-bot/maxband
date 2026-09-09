@@ -238,7 +238,31 @@
     }, bandingToolGiantFlat)
   };
 
-  /* Container payload limits — ISO maritime standard figures */
+  /* Container payload limits — ISO maritime standard figures
+   *
+   * Source: ISO 668:2020 (Series 1 freight containers — Classification,
+   * dimensions and ratings). Practical safe-payload values reflect real
+   * operational limits, not theoretical maximums:
+   *
+   *   20'GP (22G1) — max gross 30,480 kg, tare ~2,300 kg
+   *                  → theoretical payload 28,180 kg
+   *                  → practical safe payload 21,500 kg
+   *                    (capped by road-haul axle-weight law in most lanes,
+   *                     VGM verification ±5% / 1 t tolerance, and typical
+   *                     shipping-line tariff — Maersk / MSC / COSCO use
+   *                     21,500 kg as the working payload figure)
+   *                  → practical usable volume 28 m³
+   *                    (33.1 m³ nominal − 10–15% stowage / pallet loss)
+   *
+   *   40'HQ (45G1) — max gross 32,500 kg, tare ~3,900 kg
+   *                  → theoretical payload 28,600 kg
+   *                  → practical safe payload 26,500 kg
+   *                  → practical usable volume 65 m³
+   *                    (76.0 m³ nominal − 10–15% stowage / pallet loss)
+   *
+   * Over-declaring payload invites heavy overload surcharges and
+   * "no VGM, no load" refusal under SOLAS 2016.
+   */
   window.MAXXBAND_CONTAINERS = {
     '20GP': {
       label: "20' GP (Standard)",

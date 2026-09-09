@@ -409,63 +409,105 @@
     updateInquiryLinks(selected, totals, moqViolations);
   }
 
-  /* -------- Container fit visualization -------- */
+  /* -------- Container fit visualization (volume + weight, side-by-side) -------- */
   function renderContainerFit(totals) {
     const fitEl = document.getElementById('container-fit');
-    const avgCtnVol = totals.totalVolume / Math.max(1, totals.totalCartons);
-    const gp20Pct = Math.min(999, (totals.totalVolume / containers['20GP'].volumeM3) * 100);
-    const hq40Pct = Math.min(999, (totals.totalVolume / containers['40HQ'].volumeM3) * 100);
-    const gp20Fill = Math.floor(containers['20GP'].volumeM3 / avgCtnVol);
-    const hq40Fill = Math.floor(containers['40HQ'].volumeM3 / avgCtnVol);
+    const vol = totals.totalVolume;
+    const wt = totals.totalGross;
+    const blocks = [
+      { key: '20GP', label: "20' GP", volumeM3: 28, payloadKg: 21500 },
+      { key: '40HQ', label: "40' HQ", volumeM3: 65, payloadKg: 26500 }
+    ];
 
-    fitEl.innerHTML = `
-      <div class="container-block">
-        <div class="container-head">
-          <span>20' GP &nbsp·&nbsp; 28 m³</span>
-          <span>${gp20Fill} cartons fill (${gp20Pct.toFixed(1)}%)</span>
+    fitEl.innerHTML = blocks.map((c) => {
+      const volPct = (vol / c.volumeM3) * 100;
+      const wtPct = (wt / c.payloadKg) * 100;
+      const binding = Math.max(volPct, wtPct);
+      const overClass = binding > 100 ? 'bar-over' : '';
+      const volClass = volPct >= wtPct && volPct > 100 ? 'bar-over' : (volPct >= wtPct && binding > 80 ? 'bar-binding' : '');
+      const wtClass = wtPct > volPct && wtPct > 100 ? 'bar-over' : (wtPct > volPct && binding > 80 ? 'bar-binding' : '');
+      const cap = `${c.volumeM3} m³ · ${c.payloadKg.toLocaleString()} kg payload`;
+      return `
+        <div class="container-block">
+          <div class="container-head">
+            <span>${c.label} &nbsp·&nbsp; ${cap}</span>
+            <span>${binding > 100 ? '<strong>OVER CAPACITY</strong>' : 'fits both'}</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Volume</span>
+            <div class="bar-track"><div class="bar-fill ${volClass}" style="width:${Math.min(100, volPct)}%;"></div></div>
+            <span class="bar-pct">${volPct.toFixed(1)}%</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Weight</span>
+            <div class="bar-track"><div class="bar-fill ${wtClass}" style="width:${Math.min(100, wtPct)}%;"></div></div>
+            <span class="bar-pct">${wtPct.toFixed(1)}%</span>
+          </div>
         </div>
-        <div class="bar-track"><div class="bar-fill ${gp20Pct > 100 ? 'bar-over' : ''}" style="width:${Math.min(100, gp20Pct)}%;"></div></div>
-      </div>
-      <div class="container-block">
-        <div class="container-head">
-          <span>40' HQ &nbsp·&nbsp; 65 m³</span>
-          <span>${hq40Fill} cartons fill (${hq40Pct.toFixed(1)}%)</span>
-        </div>
-        <div class="bar-track"><div class="bar-fill ${hq40Pct > 100 ? 'bar-over' : ''}" style="width:${Math.min(100, hq40Pct)}%;"></div></div>
-      </div>
-    `;
+      `;
+    }).join('');
   }
 
-  /* -------- Shipping mode recommendation -------- */
+  /* -------- Shipping mode recommendation (volume AND weight aware) -------- */
   function renderRecommendation(totals) {
     const recEl = document.getElementById('recommendation');
-    let label, detail, cls;
+    const vol = totals.totalVolume;
+    const wt = totals.totalGross;
 
-    if (totals.totalVolume < 2 && totals.totalGross < 200) {
+    // Container descriptors in order: smallest first
+    const containers = [
+      { key: '20GP', label: "20' GP",        volumeM3: 28, payloadKg: 21500, fullLabel: "FCL — Full 20' GP container" },
+      { key: '40HQ', label: "40' HQ (HC)",    volumeM3: 65, payloadKg: 26500, fullLabel: "FCL — Full 40' HQ container" }
+    ];
+
+    let label, detail, cls, warn = '';
+
+    // Parcel: small AND light (DHL/FedEx/UPS international express)
+    if (vol < 2 && wt < 200) {
       label = 'Parcel (DHL / FedEx / UPS)';
-      detail = `Small enough to ship by international express — door-to-door in 3–7 days.`;
+      detail = `Small enough to ship by international express — door-to-door in 3–7 days, ~${wt.toFixed(0)} kg.`;
       cls = 'rec-parcel';
-    } else if (totals.totalVolume < 15) {
-      label = 'LCL — Less than Container Load';
-      detail = `Volume suits LCL ocean freight. You pay per m³, ship when container is full or by deadline.`;
-      cls = 'rec-lcl';
-    } else if (totals.totalVolume <= containers['20GP'].volumeM3 * 1.05) {
-      label = "FCL — Full 20' GP container";
-      detail = `A single 20'GP fits your shipment with ~${((totals.totalVolume / containers['20GP'].volumeM3) * 100).toFixed(1)}% volume utilization.`;
-      cls = 'rec-fcl';
-    } else if (totals.totalVolume <= containers['40HQ'].volumeM3 * 1.05) {
-      label = "FCL — Full 40' HQ container";
-      detail = `A single 40'HQ fits your shipment with ~${((totals.totalVolume / containers['40HQ'].volumeM3) * 100).toFixed(1)}% volume utilization.`;
-      cls = 'rec-fcl';
-    } else {
-      label = 'Multiple containers required';
-      detail = `Your total volume is ${totals.totalVolume.toFixed(2)} m³ — needs multiple FCL containers. Contact us for a freight quote.`;
-      cls = 'rec-multi';
     }
-
-    let warn = '';
-    if (totals.totalGross > containers['20GP'].payloadKg && totals.totalVolume <= containers['20GP'].volumeM3) {
-      warn = `<p class="rec-warn">⚠️ Weight (${totals.totalGross.toFixed(0)} kg) exceeds 20'GP payload (${containers['20GP'].payloadKg.toLocaleString()} kg). Use 40'HQ or split shipment.</p>`;
+    // LCL: fits in a shared container by both volume and weight
+    else if (vol < 15 && wt < 15000) {
+      label = 'LCL — Less than Container Load';
+      detail = `Volume and weight suit LCL ocean freight. You pay per m³ or per chargeable weight (m³ × 1,000 kg, whichever is greater); ship when container is full or by deadline.`;
+      cls = 'rec-lcl';
+    }
+    // FCL: pick smallest container that fits BOTH volume and weight
+    else {
+      const c = containers.find((c) => vol <= c.volumeM3 && wt <= c.payloadKg);
+      if (c) {
+        const volPct = (vol / c.volumeM3 * 100);
+        const wtPct = (wt / c.payloadKg * 100);
+        const prev = containers[containers.indexOf(c) - 1];
+        // Was there a smaller container that would have fit if not for weight?
+        const steppedUpForWeight = prev && vol <= prev.volumeM3 && wt > prev.payloadKg;
+        if (steppedUpForWeight) {
+          detail = `Volume (${vol.toFixed(2)} m³) fits a ${prev.label}, but weight (${wt.toFixed(0)} kg) exceeds its ${prev.payloadKg.toLocaleString()} kg payload. Step up to ${c.label}: ${volPct.toFixed(1)}% volume, ${wtPct.toFixed(1)}% weight utilization.`;
+        } else {
+          detail = `A single ${c.label} fits your shipment with ${volPct.toFixed(1)}% volume and ${wtPct.toFixed(1)}% weight utilization.`;
+        }
+        // Highlight the binding constraint
+        if (wtPct > volPct) {
+          warn = `<p class="rec-warn">⚠️ Weight-bound: weight utilization (${wtPct.toFixed(0)}%) exceeds volume utilization (${volPct.toFixed(0)}%). This container is constrained by payload, not cube.</p>`;
+        } else if (volPct > wtPct) {
+          warn = `<p class="rec-warn">⚠️ Cube-bound: volume utilization (${volPct.toFixed(0)}%) exceeds weight utilization (${wtPct.toFixed(0)}%). Container has spare payload.</p>`;
+        }
+        label = c.fullLabel;
+        cls = 'rec-fcl';
+      } else {
+        // Doesn't fit any single container — multi-container
+        const n40 = Math.max(
+          Math.ceil(vol / containers[1].volumeM3),
+          Math.ceil(wt / containers[1].payloadKg)
+        );
+        const totalVolCap = n40 * containers[1].volumeM3;
+        const totalWtCap = n40 * containers[1].payloadKg;
+        label = n40 === 1 ? 'Multiple containers required' : `Multiple containers required — ${n40}× 40' HQ`;
+        detail = `Total ${vol.toFixed(2)} m³ · ${wt.toFixed(0)} kg. Needs ${n40}× 40'HQ (combined capacity ${totalVolCap} m³ / ${totalWtCap.toLocaleString()} kg). ${wt > containers[1].payloadKg ? 'Weight is the binding constraint — split evenly across containers to stay under each payload limit.' : ''}`.trim();
+        cls = 'rec-multi';
+      }
     }
 
     recEl.innerHTML = `
@@ -539,10 +581,13 @@
   }
 
   function getRecommendedLabel(totals) {
-    if (totals.totalVolume < 2 && totals.totalGross < 200) return 'Parcel (DHL/FedEx/UPS)';
-    if (totals.totalVolume < 15) return 'LCL';
-    if (totals.totalVolume <= containers['20GP'].volumeM3 * 1.05) return "FCL 20'GP";
-    if (totals.totalVolume <= containers['40HQ'].volumeM3 * 1.05) return "FCL 40'HQ";
+    const vol = totals.totalVolume;
+    const wt = totals.totalGross;
+    if (vol < 2 && wt < 200) return 'Parcel (DHL/FedEx/UPS)';
+    if (vol < 15 && wt < 15000) return 'LCL';
+    // FCL: smallest container that fits BOTH volume and weight
+    if (vol <= containers['20GP'].volumeM3 && wt <= containers['20GP'].payloadKg) return "FCL 20'GP";
+    if (vol <= containers['40HQ'].volumeM3 && wt <= containers['40HQ'].payloadKg) return "FCL 40'HQ";
     return 'Multiple FCL containers';
   }
 
