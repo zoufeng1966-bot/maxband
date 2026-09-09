@@ -480,8 +480,49 @@ img { max-width: 100%; height: auto; display: block; }
 .est-row-input input:disabled { opacity: 0.4; cursor: not-allowed; }
 .est-row-unit { font-size: 13px; color: var(--text-light, #5a6b7e); }
 .est-row-derived { text-align: right; font-size: 13px; min-width: 0; }
+
+/* Variant size chips (shown after a product with multiple variants is checked) */
+.est-row-variants {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed #e1e6ed;
+}
+.est-variant-label {
+  font-size: 11px;
+  color: var(--text-light, #5a6b7e);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-right: 4px;
+}
+.est-variant-chip {
+  font-size: 12px;
+  padding: 5px 11px;
+  border: 1px solid #ccd2db;
+  border-radius: 999px;
+  background: #fafbfc;
+  color: var(--text, #1a1a1a);
+  cursor: pointer;
+  transition: all .15s;
+  font-family: inherit;
+  font-weight: 500;
+}
+.est-variant-chip:hover {
+  border-color: var(--accent, #1a3760);
+  background: #f0f4fa;
+}
+.est-variant-chip-active {
+  background: var(--accent, #1a3760);
+  border-color: var(--accent, #1a3760);
+  color: #fff;
+  box-shadow: 0 1px 4px rgba(26,55,96,0.25);
+}
 .derived-empty { color: #b8c3d4; }
 .derived-num { font-weight: 600; color: var(--accent, #1a3760); font-size: 14px; }
+.derived-variant { font-weight: 500; color: var(--text-light, #5a6b7e); font-size: 12px; margin-left: 4px; }
 .derived-sub { font-size: 11px; color: var(--text-light, #5a6b7e); margin-top: 2px; }
 .estimator-actions-top { display: flex; gap: 12px; }
 
@@ -505,6 +546,7 @@ img { max-width: 100%; height: auto; display: block; }
 .summary-breakdown { display: flex; flex-direction: column; gap: 12px; margin: 16px 0 24px; padding: 16px 0; border-top: 1px dashed #e1e6ed; border-bottom: 1px dashed #e1e6ed; }
 .breakdown-row { font-size: 13px; }
 .breakdown-name { font-weight: 600; color: var(--accent, #1a3760); margin-bottom: 4px; }
+.breakdown-variant { display: inline-block; font-size: 11px; font-weight: 500; background: #f0f4fa; color: var(--accent, #1a3760); padding: 2px 8px; border-radius: 999px; margin-left: 4px; vertical-align: 2px; }
 .breakdown-detail { color: var(--text-light, #5a6b7e); line-height: 1.6; }
 
 .summary-totals { margin-bottom: 24px; }

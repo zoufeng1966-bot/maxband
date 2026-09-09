@@ -54,6 +54,7 @@
     const row = document.createElement('div');
     row.className = 'est-row';
     row.dataset.product = key;
+    row.dataset.selectedVariantIdx = (p.hasVariants && p.variants && p.variants.length === 1) ? '0' : '';
     row.innerHTML = `
       <div class="est-row-main">
         <label class="est-checkbox">
@@ -64,6 +65,18 @@
           ${p.unitsPerBox} per box &middot; ${p.boxesPerCarton} boxes/ctn
           ${pz ? ` &middot; <strong>${priceList.currency} ${unitPrice.toFixed(2)}</strong> / ${perUnit}` : ''}
         </div>
+        ${(p.hasVariants && p.variants && p.variants.length > 1) ? `
+          <div class="est-row-variants" data-role="variant-chips" hidden>
+            <span class="est-variant-label">Choose size:</span>
+            ${p.variants.map((v, idx) => {
+              const variantLabel = v.width ? v.width + (v.thicknessMm ? ` · ${v.thicknessMm}mm thick` : '') :
+                                   v.sizeLabel ? v.sizeLabel :
+                                   v.model ? v.model :
+                                   ('Variant ' + (idx + 1));
+              return `<button type="button" class="est-variant-chip" data-product="${key}" data-variant-idx="${idx}" title="${v.cartonDimsCm} · ${v.netWeightKg}/${v.grossWeightKg} kg per carton">${variantLabel}</button>`;
+            }).join('')}
+          </div>
+        ` : ''}
         <div class="est-row-moq" data-role="moq-tag" hidden>
           MOQ: <span data-role="moq-num"></span> boxes
         </div>
@@ -89,15 +102,55 @@
   });
 
   /* -------- Event wiring -------- */
+  function needsVariantSelection(p) {
+    return !!(p.hasVariants && p.variants && p.variants.length > 1);
+  }
+  function needsVariantSelectionByKey(key) {
+    return needsVariantSelection(specs[key]);
+  }
+  function hasVariantSelected(key) {
+    const rowEl = productListEl.querySelector(`.est-row[data-product="${key}"]`);
+    return !!(rowEl && rowEl.dataset.selectedVariantIdx !== '' && rowEl.dataset.selectedVariantIdx !== undefined);
+  }
+  function setVariantSelected(key, idx) {
+    const rowEl = productListEl.querySelector(`.est-row[data-product="${key}"]`);
+    if (!rowEl) return;
+    rowEl.dataset.selectedVariantIdx = idx === null ? '' : String(idx);
+    rowEl.querySelectorAll('.est-variant-chip').forEach((c) => {
+      c.classList.toggle('est-variant-chip-active', String(idx) === c.dataset.variantIdx);
+    });
+  }
+
   productListEl.addEventListener('change', (e) => {
     const key = e.target.dataset.product;
     if (!key) return;
     const checkbox = productListEl.querySelector(`input[type="checkbox"][data-product="${key}"]`);
     const input    = productListEl.querySelector(`input[data-role="boxes"][data-product="${key}"]`);
+    const rowEl    = productListEl.querySelector(`.est-row[data-product="${key}"]`);
+    const chipsEl  = rowEl.querySelector('[data-role="variant-chips"]');
+
     if (e.target.type === 'checkbox') {
-      input.disabled = !checkbox.checked;
-      if (!checkbox.checked) input.value = '';
-      input.focus();
+      if (checkbox.checked) {
+        if (needsVariantSelectionByKey(key)) {
+          // Show variant chips; boxes stays disabled until user picks one
+          if (chipsEl) chipsEl.hidden = false;
+          input.disabled = true;
+          if (!hasVariantSelected(key)) {
+            input.value = '';
+            input.blur();
+          }
+      } else {
+          if (chipsEl) chipsEl.hidden = true;
+          input.disabled = false;
+          input.focus();
+        }
+      } else {
+        // Unchecked: collapse & clear
+        if (chipsEl) chipsEl.hidden = true;
+        setVariantSelected(key, null);
+        input.value = '';
+        input.disabled = true;
+      }
       recompute();
     } else if (e.target.dataset.role === 'boxes') {
       recompute();
@@ -108,9 +161,24 @@
     if (e.target.dataset.role === 'boxes') recompute();
   });
 
+  // Variant chip click → select variant, enable boxes input
+  productListEl.addEventListener('click', (e) => {
+    const chip = e.target.closest('.est-variant-chip');
+    if (!chip) return;
+    const key = chip.dataset.product;
+    if (!key) return;
+    setVariantSelected(key, chip.dataset.variantIdx);
+    const input = productListEl.querySelector(`input[data-role="boxes"][data-product="${key}"]`);
+    if (input) { input.disabled = false; input.focus(); }
+    recompute();
+  });
+
   document.getElementById('reset-btn').addEventListener('click', () => {
     productListEl.querySelectorAll('input[type="checkbox"]').forEach(c => c.checked = false);
     productListEl.querySelectorAll('input[data-role="boxes"]').forEach(i => { i.value = ''; i.disabled = true; });
+    productListEl.querySelectorAll('[data-role="variant-chips"]').forEach(el => { el.hidden = true; });
+    productListEl.querySelectorAll('.est-row').forEach(r => { r.dataset.selectedVariantIdx = ''; });
+    productListEl.querySelectorAll('.est-variant-chip').forEach(c => c.classList.remove('est-variant-chip-active'));
     recompute();
   });
 
@@ -136,6 +204,48 @@
         rowEl.classList.remove('row-pending-warn');
         return;
       }
+      // Pick effective spec: top-level OR selected variant
+      let eff = {
+        unitsPerBox: p.unitsPerBox,
+        boxesPerCarton: p.boxesPerCarton,
+        cartonDimsCm: p.cartonDimsCm,
+        cartonVolumeM3: p.cartonVolumeM3,
+        netWeightPerCartonKg: p.netWeightPerCartonKg,
+        grossWeightPerCartonKg: p.grossWeightPerCartonKg
+      };
+      let variantLabel = '';
+      if (needsVariantSelectionByKey(key)) {
+        const idxStr = rowEl.dataset.selectedVariantIdx;
+        if (idxStr === '' || idxStr === undefined) {
+          derivedEl.innerHTML = '<span class="derived-empty">Pick a size above first</span>';
+          rowEl.classList.remove('row-moq-warn');
+          rowEl.classList.remove('row-pending-warn');
+          return;
+        }
+        const v = p.variants[parseInt(idxStr, 10)];
+        if (!v) return;
+        eff = {
+          unitsPerBox: p.unitsPerBox,
+          boxesPerCarton: v.boxesPerCarton,
+          cartonDimsCm: v.cartonDimsCm,
+          cartonVolumeM3: v.cartonVolumeM3,
+          netWeightPerCartonKg: v.netWeightKg,
+          grossWeightPerCartonKg: v.grossWeightKg
+        };
+        variantLabel = v.width || v.sizeLabel || v.model || '';
+      } else if (p.variants && p.variants.length === 1) {
+        const v = p.variants[0];
+        eff = {
+          unitsPerBox: p.unitsPerBox,
+          boxesPerCarton: v.boxesPerCarton,
+          cartonDimsCm: v.cartonDimsCm,
+          cartonVolumeM3: v.cartonVolumeM3,
+          netWeightPerCartonKg: v.netWeightKg,
+          grossWeightPerCartonKg: v.grossWeightKg
+        };
+        variantLabel = v.model || '';
+      }
+
       const boxes = Math.max(0, parseInt(input.value, 10) || 0);
       if (boxes === 0) {
         derivedEl.innerHTML = '<span class="derived-empty">0 cartons</span>';
@@ -143,10 +253,10 @@
         rowEl.classList.remove('row-pending-warn');
         return;
       }
-      const cartons = Math.ceil(boxes / p.boxesPerCarton);
-      const volume = cartons * p.cartonVolumeM3;
-      const net = cartons * p.netWeightPerCartonKg;
-      const gross = cartons * p.grossWeightPerCartonKg;
+      const cartons = Math.ceil(boxes / eff.boxesPerCarton);
+      const volume = cartons * eff.cartonVolumeM3;
+      const net = cartons * eff.netWeightPerCartonKg;
+      const gross = cartons * eff.grossWeightPerCartonKg;
       const tier = tierPrice(key, boxes);
       const subtotal = boxes * tier.unitPrice;
 
@@ -168,8 +278,9 @@
         rowEl.classList.remove('row-pending-warn');
       }
 
+      const variantSuffix = variantLabel ? ` <span class="derived-variant">· ${variantLabel}</span>` : '';
       derivedEl.innerHTML = `
-        <div class="derived-num">${cartons} ctn</div>
+        <div class="derived-num">${cartons} ctn${variantSuffix}</div>
         <div class="derived-sub">${volume.toFixed(3)} m³ &middot; ${gross.toFixed(1)} kg</div>
         ${priceList.products[key] ? `<div class="derived-price">${priceList.currency} ${subtotal.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</div>
         <div class="derived-tier">${tier.tierLabel}</div>` : ''}
@@ -178,9 +289,10 @@
       selected.push({
         key,
         name: p.shortName,
+        variantLabel,
         boxes,
-        boxesPerCarton: p.boxesPerCarton,
-        unitsPerBox: p.unitsPerBox,
+        boxesPerCarton: eff.boxesPerCarton,
+        unitsPerBox: eff.unitsPerBox,
         cartons,
         volume,
         net,
@@ -352,7 +464,8 @@
     lines.push('━━━ Order Summary ━━━');
     lines.push('');
     selected.forEach(s => {
-      lines.push(`• ${s.name}${s.belowMoq ? '  [below MOQ]' : ''}`);
+      const variantPart = s.variantLabel ? ` (${s.variantLabel})` : '';
+      lines.push(`• ${s.name}${variantPart}${s.belowMoq ? '  [below MOQ]' : ''}`);
       lines.push(`    ${s.boxes.toLocaleString()} boxes × ${s.unitsPerBox} → ${s.cartons} export carton(s)`);
       lines.push(`    ${s.volume.toFixed(3)} m³ · ${s.gross.toFixed(1)} kg (gross)`);
       if (priceList.products[s.key]) {
@@ -436,13 +549,49 @@
       const p = specs[key];
       const checkbox = productListEl.querySelector(`input[type="checkbox"][data-product="${key}"]`);
       const input    = productListEl.querySelector(`input[data-role="boxes"][data-product="${key}"]`);
+      const rowEl    = productListEl.querySelector(`.est-row[data-product="${key}"]`);
       if (!checkbox.checked) return;
+
+      // Same variant resolution as recompute()
+      let eff = {
+        unitsPerBox: p.unitsPerBox,
+        boxesPerCarton: p.boxesPerCarton,
+        cartonVolumeM3: p.cartonVolumeM3,
+        netWeightPerCartonKg: p.netWeightPerCartonKg,
+        grossWeightPerCartonKg: p.grossWeightPerCartonKg
+      };
+      let variantLabel = '';
+      if (needsVariantSelectionByKey(key)) {
+        const idxStr = rowEl.dataset.selectedVariantIdx;
+        if (idxStr === '' || idxStr === undefined) return;
+        const v = p.variants[parseInt(idxStr, 10)];
+        if (!v) return;
+        eff = {
+          unitsPerBox: p.unitsPerBox,
+          boxesPerCarton: v.boxesPerCarton,
+          cartonVolumeM3: v.cartonVolumeM3,
+          netWeightPerCartonKg: v.netWeightKg,
+          grossWeightPerCartonKg: v.grossWeightKg
+        };
+        variantLabel = v.width || v.sizeLabel || v.model || '';
+      } else if (p.variants && p.variants.length === 1) {
+        const v = p.variants[0];
+        eff = {
+          unitsPerBox: p.unitsPerBox,
+          boxesPerCarton: v.boxesPerCarton,
+          cartonVolumeM3: v.cartonVolumeM3,
+          netWeightPerCartonKg: v.netWeightKg,
+          grossWeightPerCartonKg: v.grossWeightKg
+        };
+        variantLabel = v.model || '';
+      }
+
       const boxes = Math.max(0, parseInt(input.value, 10) || 0);
       if (boxes === 0) return;
-      const cartons = Math.ceil(boxes / p.boxesPerCarton);
-      const volume = cartons * p.cartonVolumeM3;
-      const net = cartons * p.netWeightPerCartonKg;
-      const gross = cartons * p.grossWeightPerCartonKg;
+      const cartons = Math.ceil(boxes / eff.boxesPerCarton);
+      const volume = cartons * eff.cartonVolumeM3;
+      const net = cartons * eff.netWeightPerCartonKg;
+      const gross = cartons * eff.grossWeightPerCartonKg;
       const tier = tierPrice(key, boxes);
       const subtotal = boxes * tier.unitPrice;
       totalCartons += cartons;
@@ -454,7 +603,8 @@
         moqViolations.push({ key, name: p.shortName, boxes, moq: tier.moqBoxes });
       }
       selected.push({
-        key, boxes, boxesPerCarton: p.boxesPerCarton, unitsPerBox: p.unitsPerBox,
+        key, name: p.shortName, variantLabel,
+        boxes, boxesPerCarton: eff.boxesPerCarton, unitsPerBox: eff.unitsPerBox,
         cartons, volume, net, gross,
         unitPrice: tier.unitPrice, perUnit: tier.perUnit, subtotal,
         moqBoxes: tier.moqBoxes,
